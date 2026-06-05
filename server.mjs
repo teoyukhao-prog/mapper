@@ -197,6 +197,54 @@ async function handleApi(req, res, url) {
     return sendJson(res, 200, { product, workspace: workspace(db, businessId) });
   }
 
+  if (route === "POST /api/stock-scans") {
+    const body = await readJson(req);
+    const qty = Number(body.qty || 1);
+    const product = findProductByScan(db, businessId, body.barcode || body.upc || body.sku);
+    if (!product) return sendJson(res, 404, { error: "Barcode or SKU not found in inventory" });
+    changeStock(db, businessId, {
+      sku: product.sku,
+      productName: product.name,
+      locationCode: body.locationCode || product.locationCode || "SCANNED",
+      qty,
+      type: "barcode_scan",
+      reference: body.reference || "Live scanner",
+      note: body.note || `Scanned ${body.barcode || body.sku || product.sku}`
+    });
+    addEvent(db, businessId, "stock_barcode_scanned", { sku: product.sku, qty });
+    await writeDb(db);
+    return sendJson(res, 200, { product, workspace: workspace(db, businessId) });
+  }
+
+  if (route === "POST /api/import-stock-scans") {
+    const body = await readJson(req);
+    const rows = await parseStockScanRows(body);
+    let imported = 0;
+    const skipped = [];
+    rows.forEach((row, index) => {
+      const scanCode = pick(row, ["barcode", "upc", "sku", "item_code", "product_code"]);
+      const product = findProductByScan(db, businessId, scanCode);
+      if (!product) {
+        skipped.push({ row: index + 1, code: scanCode || "-", reason: "Barcode/SKU not found" });
+        return;
+      }
+      const qty = Number(pick(row, ["qty", "quantity", "scan_qty", "stock", "count"]) || 1);
+      changeStock(db, businessId, {
+        sku: product.sku,
+        productName: product.name,
+        locationCode: pick(row, ["location", "location_code", "bin", "rack"]) || product.locationCode || "SCANNED",
+        qty,
+        type: "scanner_upload",
+        reference: pick(row, ["reference", "file", "batch", "scan_batch"]) || "Scanner upload",
+        note: pick(row, ["note", "remarks"]) || `Uploaded scan row ${index + 1}`
+      });
+      imported++;
+    });
+    addEvent(db, businessId, "stock_scan_file_imported", { imported, skipped: skipped.length });
+    await writeDb(db);
+    return sendJson(res, 200, { imported, skipped, workspace: workspace(db, businessId) });
+  }
+
   if (route === "POST /api/locations") {
     const body = await readJson(req);
     if (!body.code) return sendJson(res, 400, { error: "Location code is required" });
@@ -576,6 +624,17 @@ function parseTable(text) {
   return (hasHeader ? rows.slice(1) : rows).map((cells) => Object.fromEntries(headers.map((header, index) => [header, (cells[index] || "").trim()])));
 }
 
+async function parseStockScanRows(body) {
+  if (body.fileBase64 && /\.xlsx$/i.test(String(body.fileName || ""))) {
+    const XLSX = await import("xlsx");
+    const buffer = Buffer.from(String(body.fileBase64), "base64");
+    const workbook = XLSX.read(buffer, { type: "buffer" });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    return XLSX.utils.sheet_to_json(sheet, { defval: "", raw: false }).map((row) => Object.fromEntries(Object.entries(row).map(([key, value]) => [normalizeKey(key), String(value || "").trim()])));
+  }
+  return parseTable(String(body.csv || ""));
+}
+
 function parseDelimited(text, delimiter) {
   const rows = [];
   let row = [];
@@ -773,6 +832,12 @@ function changeStock(db, businessId, movement) {
     db.products.push(normalizeProduct({ sku, name: movement.productName || sku, stock: qty, locationCode: movement.locationCode }, businessId));
   }
   db.stockMovements.push({ id: id("mov"), businessId, sku, productName: movement.productName || product?.name || sku, locationCode: movement.locationCode || "MAIN", qty, type: movement.type || "adjustment", reference: movement.reference || "", note: movement.note || "", createdAt: now() });
+}
+
+function findProductByScan(db, businessId, value) {
+  const code = String(value || "").trim().toLowerCase();
+  if (!code) return null;
+  return db.products.find((product) => product.businessId === businessId && [product.sku, product.upc].filter(Boolean).some((item) => String(item).trim().toLowerCase() === code)) || null;
 }
 
 function auth(req, db) {
