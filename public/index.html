@@ -3,17 +3,17 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>RouteWise Cloud</title>
+  <title>Mapper WMS</title>
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
   <div id="loginScreen" class="login-screen">
     <section class="login-card">
       <div class="brand-row">
-        <div class="brand-mark">RW</div>
+        <div class="brand-mark">MP</div>
         <div>
-          <h1>RouteWise Cloud</h1>
-          <p>Delivery planning SaaS for Shopee appliance sellers</p>
+          <h1>Mapper WMS</h1>
+          <p>Warehouse, order, and delivery control for ecommerce sellers</p>
         </div>
       </div>
 
@@ -44,24 +44,28 @@
   <div id="appShell" class="app hidden">
     <aside class="sidebar">
       <div class="brand-row compact">
-        <div class="brand-mark">RW</div>
+        <div class="brand-mark">MP</div>
         <div>
-          <h1>RouteWise Cloud</h1>
+          <h1>Mapper WMS</h1>
           <p id="businessName">Business</p>
         </div>
       </div>
 
       <nav class="nav">
         <button class="active" data-view="dashboard">Dashboard</button>
+        <button data-view="inbound">Inbound</button>
+        <button data-view="inventory">Inventory</button>
+        <button data-view="outbound">Outbound</button>
         <button data-view="orders">Orders</button>
         <button data-view="dispatch">Dispatch</button>
+        <button data-view="reports">Reports</button>
+        <button data-view="warehouse">Warehouse</button>
         <button data-view="history">History</button>
-        <button data-view="drivers">Drivers</button>
         <button data-view="settings">Settings</button>
       </nav>
 
       <div class="side-note">
-        Multi-business cloud structure. Each login sees only its own workspace data.
+        Mapper WMS combines receiving, inventory, picking, routing, and driver mobile handoff in one workspace.
       </div>
     </aside>
 
@@ -79,10 +83,10 @@
       </div>
 
       <section class="stats">
-        <div class="stat"><span>Pending</span><strong id="statPending">0</strong></div>
-        <div class="stat"><span>Review</span><strong id="statReview">0</strong></div>
-        <div class="stat"><span>Delivered</span><strong id="statDelivered">0</strong></div>
-        <div class="stat"><span>Vehicles</span><strong id="statVehicles">0</strong></div>
+        <div class="stat"><span>Outbound</span><strong id="statPending">0</strong></div>
+        <div class="stat"><span>Problems</span><strong id="statReview">0</strong></div>
+        <div class="stat"><span>Stock Qty</span><strong id="statDelivered">0</strong></div>
+        <div class="stat"><span>SKUs</span><strong id="statVehicles">0</strong></div>
         <div class="stat"><span>Route</span><strong id="statRoute">0 km</strong></div>
       </section>
 
@@ -110,6 +114,117 @@
             </div>
             <div class="panel-body">
               <div id="issueList" class="stack"></div>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section id="inbound" class="view">
+        <div class="grid-2">
+          <section class="panel">
+            <div class="panel-header">
+              <h3>Purchase Order Receiving</h3>
+              <span id="inboundCount">0 open</span>
+            </div>
+            <div class="panel-body">
+              <div class="settings-grid">
+                <label class="field">PO number<input id="poNo" placeholder="PO-20260606-1"></label>
+                <label class="field">Supplier<input id="poSupplier" placeholder="Samsung Malaysia"></label>
+                <label class="field">SKU<input id="poSku" placeholder="FRIDGE-320L"></label>
+                <label class="field">Product name<input id="poProductName" placeholder="Samsung fridge"></label>
+                <label class="field">Quantity<input id="poQty" type="number" value="1"></label>
+                <label class="field">Putaway location<input id="poLocation" placeholder="A1-01"></label>
+              </div>
+              <div class="toolbar spaced">
+                <button class="btn primary" id="addPoBtn" type="button">Create PO</button>
+              </div>
+              <div id="purchaseOrderList" class="stack spaced"></div>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-header">
+              <h3>Putaway Work</h3>
+              <span>Receive stock into a bin</span>
+            </div>
+            <div class="panel-body">
+              <div id="putawayList" class="stack"></div>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section id="inventory" class="view">
+        <div class="grid-2">
+          <section class="panel">
+            <div class="panel-header">
+              <h3>Product Setup</h3>
+              <span id="inventoryCount">0 SKUs</span>
+            </div>
+            <div class="panel-body">
+              <div class="settings-grid">
+                <label class="field">SKU<input id="productSku" placeholder="TV-55-LED"></label>
+                <label class="field">UPC / Barcode<input id="productUpc" placeholder="955300550001"></label>
+                <label class="field">Product name<input id="productName" placeholder="Hisense 55 inch TV"></label>
+                <label class="field">Category<input id="productCategory" placeholder="Television"></label>
+                <label class="field">Supplier<input id="productSupplier" placeholder="Hisense Malaysia"></label>
+                <label class="field">Location<input id="productLocation" placeholder="B2-01"></label>
+                <label class="field">Stock<input id="productStock" type="number" value="0"></label>
+                <label class="field">Reorder level<input id="productReorder" type="number" value="0"></label>
+                <label class="field">Cost RM<input id="productCost" type="number" value="0"></label>
+                <label class="field">Selling price RM<input id="productPrice" type="number" value="0"></label>
+              </div>
+              <div class="toolbar spaced">
+                <button class="btn primary" id="saveProductBtn" type="button">Save Product</button>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-header">
+              <h3>Stock Balance</h3>
+              <span>Location & SKU</span>
+            </div>
+            <div class="panel-body">
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>SKU</th>
+                      <th>Product</th>
+                      <th>Category</th>
+                      <th>Location</th>
+                      <th>Stock</th>
+                      <th>Price</th>
+                    </tr>
+                  </thead>
+                  <tbody id="inventoryBody"></tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section id="outbound" class="view">
+        <div class="grid-2">
+          <section class="panel">
+            <div class="panel-header">
+              <h3>Picking & Packing</h3>
+              <span id="outboundCount">0 orders</span>
+            </div>
+            <div class="panel-body">
+              <div id="outboundBoard" class="cards"></div>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-header">
+              <h3>Problem Orders</h3>
+              <span>Address, stock, or failed delivery checks</span>
+            </div>
+            <div class="panel-body">
+              <div id="problemOrderList" class="stack"></div>
             </div>
           </section>
         </div>
@@ -177,6 +292,87 @@
         </div>
       </section>
 
+      <section id="reports" class="view">
+        <div class="grid-2">
+          <section class="panel">
+            <div class="panel-header">
+              <h3>Warehouse Intelligence</h3>
+              <span>Useful business monitoring</span>
+            </div>
+            <div class="panel-body">
+              <div id="reportCards" class="metric-grid"></div>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-header">
+              <h3>Stock Movement Report</h3>
+              <span id="movementCount">0 movements</span>
+            </div>
+            <div class="panel-body">
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Type</th>
+                      <th>SKU</th>
+                      <th>Location</th>
+                      <th>Qty</th>
+                      <th>Reference</th>
+                    </tr>
+                  </thead>
+                  <tbody id="movementBody"></tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section id="warehouse" class="view">
+        <div class="grid-2">
+          <section class="panel">
+            <div class="panel-header">
+              <h3>Location Control</h3>
+              <span id="locationCount">0 locations</span>
+            </div>
+            <div class="panel-body">
+              <div class="settings-grid">
+                <label class="field">Location code<input id="locationCode" placeholder="A1-01"></label>
+                <label class="field">Zone<input id="locationZone" placeholder="Appliance Rack A"></label>
+                <label class="field">Type<input id="locationType" placeholder="Bulk"></label>
+                <label class="field">Verifier<input id="locationVerifier" placeholder="Scan barcode before putaway"></label>
+              </div>
+              <div class="toolbar spaced">
+                <button class="btn primary" id="saveLocationBtn" type="button">Save Location</button>
+              </div>
+              <div id="locationList" class="cards spaced"></div>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-header">
+              <h3>Vehicles, Users & Customers</h3>
+              <span id="vehicleCount">0 vehicles</span>
+            </div>
+            <div class="panel-body">
+              <div class="settings-grid">
+                <label class="field">Vehicle<input id="vehicleName" placeholder="Van 1"></label>
+                <label class="field">Capacity kg<input id="vehicleCapacity" type="number" value="500"></label>
+                <label class="field">Driver name<input id="driverName" placeholder="Ahmad"></label>
+                <label class="field">Driver WhatsApp<input id="driverPhone" placeholder="60123456789"></label>
+              </div>
+              <div class="toolbar spaced">
+                <button class="btn primary" id="addVehicleBtn" type="button">Add Vehicle</button>
+              </div>
+              <div id="vehicleList" class="cards spaced"></div>
+              <div id="customerList" class="cards spaced"></div>
+            </div>
+          </section>
+        </div>
+      </section>
+
       <section id="history" class="view">
         <section class="panel">
           <div class="panel-header">
@@ -212,27 +408,6 @@
                 <tbody id="historyBody"></tbody>
               </table>
             </div>
-          </div>
-        </section>
-      </section>
-
-      <section id="drivers" class="view">
-        <section class="panel">
-          <div class="panel-header">
-            <h3>Vehicles & Drivers</h3>
-            <span id="vehicleCount">0 vehicles</span>
-          </div>
-          <div class="panel-body">
-            <div class="settings-grid">
-              <label class="field">Vehicle<input id="vehicleName" placeholder="Van 1"></label>
-              <label class="field">Capacity kg<input id="vehicleCapacity" type="number" value="500"></label>
-              <label class="field">Driver name<input id="driverName" placeholder="Ahmad"></label>
-              <label class="field">Driver WhatsApp<input id="driverPhone" placeholder="60123456789"></label>
-            </div>
-            <div class="toolbar spaced">
-              <button class="btn primary" id="addVehicleBtn" type="button">Add Vehicle</button>
-            </div>
-            <div id="vehicleList" class="cards spaced"></div>
           </div>
         </section>
       </section>
