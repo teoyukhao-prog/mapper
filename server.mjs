@@ -97,6 +97,7 @@ async function handleApi(req, res, url) {
     db.businesses.push(business);
     db.users.push(user);
     db.vehicles.push({ id: id("veh"), businessId: business.id, name: "Van 1", capacity: 500, driverName: "Driver 1", driverPhone: "", createdAt: now() });
+    seedWarehouseSetup(db, business.id);
     addEvent(db, business.id, "business_created", { businessName: business.name });
     const token = crypto.randomUUID();
     db.sessions[token] = { userId: user.id, businessId: business.id, createdAt: now() };
@@ -184,6 +185,93 @@ async function handleApi(req, res, url) {
     return sendJson(res, 200, { workspace: workspace(db, businessId) });
   }
 
+  if (route === "POST /api/products") {
+    const body = await readJson(req);
+    if (!body.sku && !body.name) return sendJson(res, 400, { error: "SKU or product name is required" });
+    const product = normalizeProduct(body, businessId);
+    const current = db.products.find((item) => item.businessId === businessId && item.sku.toLowerCase() === product.sku.toLowerCase());
+    if (current) Object.assign(current, product, { id: current.id, createdAt: current.createdAt, updatedAt: now() });
+    else db.products.push(product);
+    addEvent(db, businessId, "product_saved", { sku: product.sku });
+    await writeDb(db);
+    return sendJson(res, 200, { product, workspace: workspace(db, businessId) });
+  }
+
+  if (route === "POST /api/locations") {
+    const body = await readJson(req);
+    if (!body.code) return sendJson(res, 400, { error: "Location code is required" });
+    const location = normalizeLocation(body, businessId);
+    const current = db.locations.find((item) => item.businessId === businessId && item.code.toLowerCase() === location.code.toLowerCase());
+    if (current) Object.assign(current, location, { id: current.id, createdAt: current.createdAt, updatedAt: now() });
+    else db.locations.push(location);
+    addEvent(db, businessId, "location_saved", { code: location.code });
+    await writeDb(db);
+    return sendJson(res, 200, { location, workspace: workspace(db, businessId) });
+  }
+
+  if (route === "POST /api/purchase-orders") {
+    const body = await readJson(req);
+    const sku = String(body.sku || "").trim();
+    if (!sku) return sendJson(res, 400, { error: "SKU is required" });
+    const product = db.products.find((item) => item.businessId === businessId && item.sku.toLowerCase() === sku.toLowerCase());
+    const po = {
+      id: id("po"),
+      businessId,
+      poNo: body.poNo || `PO-${today().replaceAll("-", "")}-${db.purchaseOrders.length + 1}`,
+      supplier: body.supplier || product?.supplier || "Default supplier",
+      sku,
+      productName: body.productName || product?.name || sku,
+      qty: Number(body.qty || 1),
+      locationCode: body.locationCode || product?.locationCode || "RECEIVING",
+      status: "open",
+      createdAt: now(),
+      updatedAt: now()
+    };
+    db.purchaseOrders.push(po);
+    upsertSupplier(db, businessId, po.supplier);
+    addEvent(db, businessId, "purchase_order_created", { poNo: po.poNo, sku: po.sku, qty: po.qty });
+    await writeDb(db);
+    return sendJson(res, 201, { purchaseOrder: po, workspace: workspace(db, businessId) });
+  }
+
+  if (route === "PATCH /api/purchase-orders/receive") {
+    const body = await readJson(req);
+    const po = db.purchaseOrders.find((item) => item.businessId === businessId && item.id === body.id);
+    if (!po) return sendJson(res, 404, { error: "Purchase order not found" });
+    po.status = "received";
+    po.locationCode = body.locationCode || po.locationCode;
+    po.updatedAt = now();
+    changeStock(db, businessId, {
+      sku: po.sku,
+      productName: po.productName,
+      locationCode: po.locationCode,
+      qty: po.qty,
+      type: "receive",
+      reference: po.poNo,
+      note: "Purchase order received"
+    });
+    addEvent(db, businessId, "purchase_order_received", { poNo: po.poNo, sku: po.sku, qty: po.qty });
+    await writeDb(db);
+    return sendJson(res, 200, { workspace: workspace(db, businessId) });
+  }
+
+  if (route === "POST /api/stock-adjustments") {
+    const body = await readJson(req);
+    if (!body.sku) return sendJson(res, 400, { error: "SKU is required" });
+    changeStock(db, businessId, {
+      sku: body.sku,
+      productName: body.productName || body.sku,
+      locationCode: body.locationCode || "MAIN",
+      qty: Number(body.qty || 0),
+      type: body.type || "adjustment",
+      reference: body.reference || "Manual",
+      note: body.note || ""
+    });
+    addEvent(db, businessId, "stock_adjusted", { sku: body.sku, qty: Number(body.qty || 0) });
+    await writeDb(db);
+    return sendJson(res, 200, { workspace: workspace(db, businessId) });
+  }
+
   if (route === "POST /api/vehicles") {
     const body = await readJson(req);
     const vehicle = { id: id("veh"), businessId, name: body.name || "Vehicle", capacity: Number(body.capacity || 500), driverName: body.driverName || "", driverPhone: cleanPhone(body.driverPhone || ""), createdAt: now() };
@@ -231,7 +319,21 @@ function workspace(db, businessId) {
   const vehicles = db.vehicles.filter((item) => item.businessId === businessId);
   const customers = db.customers.filter((item) => item.businessId === businessId);
   const routes = db.routes.filter((item) => item.businessId === businessId && item.date === today());
-  return { business, orders, vehicles, customers, routes };
+  const products = db.products.filter((item) => item.businessId === businessId);
+  const suppliers = db.suppliers.filter((item) => item.businessId === businessId);
+  const locations = db.locations.filter((item) => item.businessId === businessId);
+  const purchaseOrders = db.purchaseOrders.filter((item) => item.businessId === businessId);
+  const stockMovements = db.stockMovements.filter((item) => item.businessId === businessId);
+  return { business, orders, vehicles, customers, routes, products, suppliers, locations, purchaseOrders, stockMovements, wmsSummary: buildWmsSummary({ orders, products, locations, purchaseOrders, stockMovements }) };
+}
+
+function buildWmsSummary(data) {
+  const pendingOutbound = data.orders.filter((order) => ["pending", "review", "picking", "packing", "to_ship", "routed"].includes(order.status)).length;
+  const problemOrders = data.orders.filter((order) => order.issues?.length || order.status === "review" || order.status === "failed").length;
+  const openInbound = data.purchaseOrders.filter((po) => po.status !== "received").length;
+  const lowStock = data.products.filter((product) => Number(product.stock || 0) <= Number(product.reorderLevel || 0)).length;
+  const totalStock = data.products.reduce((sum, product) => sum + Number(product.stock || 0), 0);
+  return { pendingOutbound, problemOrders, openInbound, lowStock, totalStock, skus: data.products.length, locations: data.locations.length };
 }
 
 function platformOverview(db) {
@@ -527,6 +629,15 @@ async function readDb() {
   db.platformSessions ||= {};
   db.deliveryEvents ||= [];
   db.sessions ||= {};
+  db.products ||= [];
+  db.suppliers ||= [];
+  db.locations ||= [];
+  db.purchaseOrders ||= [];
+  db.stockMovements ||= [];
+  if (db.businesses?.some((business) => business.id === "biz_demo") && !db.products.some((product) => product.businessId === "biz_demo")) {
+    seedWarehouseSetup(db, "biz_demo");
+    await writeDb(db);
+  }
   return db;
 }
 
@@ -549,9 +660,119 @@ function seedDb() {
     orders: [],
     customers: [],
     routes: [],
+    products: seedProducts(businessId),
+    suppliers: seedSuppliers(businessId),
+    locations: seedLocations(businessId),
+    purchaseOrders: seedPurchaseOrders(businessId),
+    stockMovements: seedStockMovements(businessId),
     deliveryEvents: [],
     sessions: {}
   };
+}
+
+function seedWarehouseSetup(db, businessId) {
+  db.products.push(...seedProducts(businessId));
+  db.suppliers.push(...seedSuppliers(businessId));
+  db.locations.push(...seedLocations(businessId));
+  db.purchaseOrders.push(...seedPurchaseOrders(businessId));
+  db.stockMovements.push(...seedStockMovements(businessId));
+}
+
+function seedProducts(businessId) {
+  return [
+    { id: "sku_fridge_320", businessId, sku: "FRIDGE-320L", upc: "955100320001", name: "Samsung 320L 2-door fridge", category: "Refrigerator", supplier: "Samsung Malaysia", locationCode: "A1-01", stock: 8, cost: 1280, price: 1699, reorderLevel: 3, createdAt: now(), updatedAt: now() },
+    { id: "sku_washer_10", businessId, sku: "WASHER-10KG", upc: "955200100010", name: "Sharp 10kg washing machine", category: "Washing Machine", supplier: "Sharp Malaysia", locationCode: "A1-02", stock: 5, cost: 880, price: 1299, reorderLevel: 2, createdAt: now(), updatedAt: now() },
+    { id: "sku_tv_55", businessId, sku: "TV-55-LED", upc: "955300550001", name: "Hisense 55 inch TV", category: "Television", supplier: "Hisense Malaysia", locationCode: "B2-01", stock: 11, cost: 1350, price: 1899, reorderLevel: 4, createdAt: now(), updatedAt: now() },
+    { id: "sku_aircond_1hp", businessId, sku: "AC-1HP", upc: "955400100001", name: "Midea 1HP air conditioner", category: "Air Conditioner", supplier: "Midea Malaysia", locationCode: "B2-02", stock: 4, cost: 760, price: 1099, reorderLevel: 3, createdAt: now(), updatedAt: now() }
+  ];
+}
+
+function seedSuppliers(businessId) {
+  return [
+    { id: "sup_samsung", businessId, name: "Samsung Malaysia", contact: "Supplier sales", phone: "", createdAt: now() },
+    { id: "sup_sharp", businessId, name: "Sharp Malaysia", contact: "Supplier sales", phone: "", createdAt: now() },
+    { id: "sup_midea", businessId, name: "Midea Malaysia", contact: "Supplier sales", phone: "", createdAt: now() }
+  ];
+}
+
+function seedLocations(businessId) {
+  return [
+    { id: "loc_receiving", businessId, code: "RECEIVING", zone: "Inbound", type: "Staging", verifier: "Scan item and PO before putaway", active: true, createdAt: now(), updatedAt: now() },
+    { id: "loc_a101", businessId, code: "A1-01", zone: "Appliance Rack A", type: "Bulk", verifier: "Large item rack", active: true, createdAt: now(), updatedAt: now() },
+    { id: "loc_a102", businessId, code: "A1-02", zone: "Appliance Rack A", type: "Bulk", verifier: "Heavy item rack", active: true, createdAt: now(), updatedAt: now() },
+    { id: "loc_b201", businessId, code: "B2-01", zone: "Display Stock", type: "Shelf", verifier: "Box serial check", active: true, createdAt: now(), updatedAt: now() },
+    { id: "loc_ship", businessId, code: "TO-SHIP", zone: "Outbound", type: "Staging", verifier: "Packed orders only", active: true, createdAt: now(), updatedAt: now() }
+  ];
+}
+
+function seedPurchaseOrders(businessId) {
+  return [
+    { id: "po_demo_1", businessId, poNo: "PO-20260605-1", supplier: "Midea Malaysia", sku: "AC-1HP", productName: "Midea 1HP air conditioner", qty: 6, locationCode: "RECEIVING", status: "open", createdAt: now(), updatedAt: now() }
+  ];
+}
+
+function seedStockMovements(businessId) {
+  return [
+    { id: "mov_1", businessId, sku: "FRIDGE-320L", productName: "Samsung 320L 2-door fridge", locationCode: "A1-01", qty: 8, type: "opening", reference: "Opening stock", note: "", createdAt: now() },
+    { id: "mov_2", businessId, sku: "WASHER-10KG", productName: "Sharp 10kg washing machine", locationCode: "A1-02", qty: 5, type: "opening", reference: "Opening stock", note: "", createdAt: now() },
+    { id: "mov_3", businessId, sku: "TV-55-LED", productName: "Hisense 55 inch TV", locationCode: "B2-01", qty: 11, type: "opening", reference: "Opening stock", note: "", createdAt: now() }
+  ];
+}
+
+function normalizeProduct(body, businessId) {
+  const sku = String(body.sku || body.name || "").trim().toUpperCase().replace(/\s+/g, "-");
+  return {
+    id: id("sku"),
+    businessId,
+    sku,
+    upc: String(body.upc || "").trim(),
+    name: body.name || sku,
+    category: body.category || "General",
+    supplier: body.supplier || "Default supplier",
+    locationCode: body.locationCode || "RECEIVING",
+    stock: Number(body.stock || 0),
+    cost: Number(body.cost || 0),
+    price: Number(body.price || 0),
+    reorderLevel: Number(body.reorderLevel || 0),
+    createdAt: now(),
+    updatedAt: now()
+  };
+}
+
+function normalizeLocation(body, businessId) {
+  return {
+    id: id("loc"),
+    businessId,
+    code: String(body.code || "").trim().toUpperCase(),
+    zone: body.zone || "Warehouse",
+    type: body.type || "Shelf",
+    verifier: body.verifier || "Visual check",
+    active: body.active !== false,
+    createdAt: now(),
+    updatedAt: now()
+  };
+}
+
+function upsertSupplier(db, businessId, name) {
+  const cleanName = String(name || "").trim();
+  if (!cleanName) return;
+  if (!db.suppliers.some((supplier) => supplier.businessId === businessId && supplier.name.toLowerCase() === cleanName.toLowerCase())) {
+    db.suppliers.push({ id: id("sup"), businessId, name: cleanName, contact: "", phone: "", createdAt: now() });
+  }
+}
+
+function changeStock(db, businessId, movement) {
+  const qty = Number(movement.qty || 0);
+  const sku = String(movement.sku || "").trim().toUpperCase();
+  const product = db.products.find((item) => item.businessId === businessId && item.sku.toLowerCase() === sku.toLowerCase());
+  if (product) {
+    product.stock = Number(product.stock || 0) + qty;
+    product.locationCode = movement.locationCode || product.locationCode;
+    product.updatedAt = now();
+  } else {
+    db.products.push(normalizeProduct({ sku, name: movement.productName || sku, stock: qty, locationCode: movement.locationCode }, businessId));
+  }
+  db.stockMovements.push({ id: id("mov"), businessId, sku, productName: movement.productName || product?.name || sku, locationCode: movement.locationCode || "MAIN", qty, type: movement.type || "adjustment", reference: movement.reference || "", note: movement.note || "", createdAt: now() });
 }
 
 function auth(req, db) {
