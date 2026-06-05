@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RouteWise Platform Admin</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div id="platformLogin" class="login-screen">
+    <section class="login-card">
+      <div class="brand-row">
+        <div class="brand-mark">RW</div>
+        <div>
+          <h1>Platform Admin</h1>
+          <p>Monitor business usage and product opportunities</p>
+        </div>
+      </div>
+      <form id="platformLoginForm" class="form-stack">
+        <label>Email<input name="email" value="founder@routewise.local"></label>
+        <label>Password<input name="password" type="password" value="founder123"></label>
+        <button class="btn primary" type="submit">Login</button>
+      </form>
+      <p class="small-note">Founder demo login: founder@routewise.local / founder123</p>
+    </section>
+  </div>
+
+  <div id="platformApp" class="app hidden">
+    <aside class="sidebar">
+      <div class="brand-row compact">
+        <div class="brand-mark">RW</div>
+        <div>
+          <h1>Platform Admin</h1>
+          <p>SaaS owner dashboard</p>
+        </div>
+      </div>
+      <div class="side-note">
+        Use this to monitor adoption, delivery activity, operational problems, and which features to build next.
+      </div>
+    </aside>
+
+    <main>
+      <div class="topbar">
+        <div>
+          <h2>Usage Monitoring</h2>
+          <p>Businesses, routes, completed orders, driver usage, and product improvement signals.</p>
+        </div>
+        <div class="toolbar">
+          <button class="btn primary" id="refreshPlatformBtn" type="button">Refresh</button>
+          <button class="btn" id="platformLogoutBtn" type="button">Logout</button>
+        </div>
+      </div>
+
+      <section class="stats">
+        <div class="stat"><span>Businesses</span><strong id="pBusinesses">0</strong></div>
+        <div class="stat"><span>Orders</span><strong id="pOrders">0</strong></div>
+        <div class="stat"><span>Routes</span><strong id="pRoutes">0</strong></div>
+        <div class="stat"><span>Delivered</span><strong id="pDelivered">0</strong></div>
+        <div class="stat"><span>Review/Failed</span><strong id="pRisk">0</strong></div>
+      </section>
+
+      <div class="grid-2">
+        <section class="panel">
+          <div class="panel-header">
+            <h3>Business Usage</h3>
+            <span id="businessUsageCount">0 businesses</span>
+          </div>
+          <div class="panel-body">
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Business</th>
+                    <th>Orders</th>
+                    <th>Delivered</th>
+                    <th>Issues</th>
+                    <th>Routes</th>
+                    <th>Last Active</th>
+                    <th>Score</th>
+                  </tr>
+                </thead>
+                <tbody id="businessUsageBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <h3>Improvement Signals</h3>
+            <span>Product roadmap hints</span>
+          </div>
+          <div class="panel-body">
+            <div id="improvementSignals" class="stack"></div>
+          </div>
+        </section>
+      </div>
+
+      <section class="panel spaced">
+        <div class="panel-header">
+          <h3>Recent Platform Events</h3>
+          <span id="eventCount">0 events</span>
+        </div>
+        <div class="panel-body">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Business</th>
+                  <th>Event</th>
+                  <th>Details</th>
+                </tr>
+              </thead>
+              <tbody id="eventsBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="toast" class="toast"></div>
+  <script src="/platform.js"></script>
+</body>
+</html>
