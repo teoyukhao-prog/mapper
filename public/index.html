@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RouteWise Cloud</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div id="loginScreen" class="login-screen">
+    <section class="login-card">
+      <div class="brand-row">
+        <div class="brand-mark">RW</div>
+        <div>
+          <h1>RouteWise Cloud</h1>
+          <p>Delivery planning SaaS for Shopee appliance sellers</p>
+        </div>
+      </div>
+
+      <div class="tabs">
+        <button id="loginTab" class="active" type="button">Login</button>
+        <button id="registerTab" type="button">Create Business</button>
+      </div>
+
+      <form id="loginForm" class="form-stack">
+        <label>Email<input name="email" value="demo@routewise.local"></label>
+        <label>Password<input name="password" type="password" value="demo123"></label>
+        <button class="btn primary" type="submit">Login</button>
+      </form>
+
+      <form id="registerForm" class="form-stack hidden">
+        <label>Business name<input name="businessName" placeholder="ABC Appliance Store"></label>
+        <label>Owner name<input name="name" placeholder="Owner"></label>
+        <label>Email<input name="email" type="email" placeholder="owner@example.com"></label>
+        <label>Password<input name="password" type="password" placeholder="Minimum 6 characters"></label>
+        <label>Depot<input name="depot" placeholder="Bukit Jalil, Kuala Lumpur"></label>
+        <button class="btn primary" type="submit">Create Workspace</button>
+      </form>
+
+      <p class="small-note">Demo login: demo@routewise.local / demo123</p>
+    </section>
+  </div>
+
+  <div id="appShell" class="app hidden">
+    <aside class="sidebar">
+      <div class="brand-row compact">
+        <div class="brand-mark">RW</div>
+        <div>
+          <h1>RouteWise Cloud</h1>
+          <p id="businessName">Business</p>
+        </div>
+      </div>
+
+      <nav class="nav">
+        <button class="active" data-view="dashboard">Dashboard</button>
+        <button data-view="orders">Orders</button>
+        <button data-view="dispatch">Dispatch</button>
+        <button data-view="history">History</button>
+        <button data-view="drivers">Drivers</button>
+        <button data-view="settings">Settings</button>
+      </nav>
+
+      <div class="side-note">
+        Multi-business cloud structure. Each login sees only its own workspace data.
+      </div>
+    </aside>
+
+    <main>
+      <div class="topbar">
+        <div>
+          <h2 id="pageTitle">Dashboard</h2>
+          <p id="pageSubtitle">Daily delivery control center</p>
+        </div>
+        <div class="toolbar">
+          <button class="btn" id="sampleBtn" type="button">Load Sample</button>
+          <button class="btn primary" id="buildRouteBtn" type="button">Build Route</button>
+          <button class="btn" id="logoutBtn" type="button">Logout</button>
+        </div>
+      </div>
+
+      <section class="stats">
+        <div class="stat"><span>Pending</span><strong id="statPending">0</strong></div>
+        <div class="stat"><span>Review</span><strong id="statReview">0</strong></div>
+        <div class="stat"><span>Delivered</span><strong id="statDelivered">0</strong></div>
+        <div class="stat"><span>Vehicles</span><strong id="statVehicles">0</strong></div>
+        <div class="stat"><span>Route</span><strong id="statRoute">0 km</strong></div>
+      </section>
+
+      <section id="dashboard" class="view active">
+        <div class="grid-2">
+          <section class="panel">
+            <div class="panel-header">
+              <h3>Import Shopee Orders</h3>
+              <span id="importCount">CSV / Excel paste</span>
+            </div>
+            <div class="panel-body">
+              <label class="field">CSV file<input id="csvFile" type="file" accept=".csv,text/csv"></label>
+              <label class="field">Paste CSV / Excel rows<textarea id="csvText" placeholder="order_id,customer_name,phone,address,postcode,city,state,items"></textarea></label>
+              <div class="toolbar">
+                <button class="btn primary" id="importBtn" type="button">Import Orders</button>
+                <button class="btn" id="clearCsvBtn" type="button">Clear</button>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-header">
+              <h3>Address Review</h3>
+              <span id="issueCount">0 checks</span>
+            </div>
+            <div class="panel-body">
+              <div id="issueList" class="stack"></div>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section id="orders" class="view">
+        <section class="panel">
+          <div class="panel-header">
+            <h3>Orders</h3>
+            <span id="ordersCount">0 orders</span>
+          </div>
+          <div class="panel-body">
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Order</th>
+                    <th>Customer</th>
+                    <th>Phone</th>
+                    <th>Address</th>
+                    <th>Zone</th>
+                    <th>Items</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="ordersBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      </section>
+
+      <section id="dispatch" class="view">
+        <div class="grid-2">
+          <section class="panel">
+            <div class="panel-header">
+              <h3>Route Map</h3>
+              <span id="routeSummary">No route</span>
+            </div>
+            <div class="panel-body">
+              <div class="map" id="mapBoard">
+                <div class="road a"></div>
+                <div class="road b"></div>
+                <div class="road c"></div>
+              </div>
+              <div class="toolbar spaced">
+                <button class="btn primary" id="sendDriverBtn" type="button">Send to Driver</button>
+                <button class="btn" id="openDriverPageBtn" type="button">Driver Page</button>
+                <button class="btn" id="copyDriverBtn" type="button">Copy Route</button>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-header">
+              <h3>Driver Stops</h3>
+              <span id="stopCount">0 stops</span>
+            </div>
+            <div class="panel-body">
+              <div id="routeTabs" class="segmented"></div>
+              <div id="routeList" class="stack spaced"></div>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section id="history" class="view">
+        <section class="panel">
+          <div class="panel-header">
+            <h3>Completed Order History</h3>
+            <span id="historyCount">0 records</span>
+          </div>
+          <div class="panel-body">
+            <div class="settings-grid" style="margin-bottom:12px;">
+              <label class="field">History filter
+                <select id="historyFilter">
+                  <option value="completed">Completed only</option>
+                  <option value="failed">Failed only</option>
+                  <option value="all">All imported orders</option>
+                </select>
+              </label>
+              <label class="field">Search history
+                <input id="historySearch" placeholder="Customer, order, address, item">
+              </label>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Order</th>
+                    <th>Customer</th>
+                    <th>Address</th>
+                    <th>Items</th>
+                    <th>Zone</th>
+                    <th>Status</th>
+                    <th>Updated</th>
+                  </tr>
+                </thead>
+                <tbody id="historyBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      </section>
+
+      <section id="drivers" class="view">
+        <section class="panel">
+          <div class="panel-header">
+            <h3>Vehicles & Drivers</h3>
+            <span id="vehicleCount">0 vehicles</span>
+          </div>
+          <div class="panel-body">
+            <div class="settings-grid">
+              <label class="field">Vehicle<input id="vehicleName" placeholder="Van 1"></label>
+              <label class="field">Capacity kg<input id="vehicleCapacity" type="number" value="500"></label>
+              <label class="field">Driver name<input id="driverName" placeholder="Ahmad"></label>
+              <label class="field">Driver WhatsApp<input id="driverPhone" placeholder="60123456789"></label>
+            </div>
+            <div class="toolbar spaced">
+              <button class="btn primary" id="addVehicleBtn" type="button">Add Vehicle</button>
+            </div>
+            <div id="vehicleList" class="cards spaced"></div>
+          </div>
+        </section>
+      </section>
+
+      <section id="settings" class="view">
+        <section class="panel">
+          <div class="panel-header">
+            <h3>Business Settings</h3>
+            <span>Cloud workspace defaults</span>
+          </div>
+          <div class="panel-body">
+            <div class="settings-grid">
+              <label class="field">Business name<input id="settingName"></label>
+              <label class="field">Depot<input id="settingDepot"></label>
+              <label class="field">Delivery window<input id="settingWindow"></label>
+              <label class="field">Stop minutes<input id="settingStopMinutes" type="number"></label>
+              <label class="field">Speed km/h<input id="settingSpeed" type="number"></label>
+              <label class="field">Route style
+                <select id="settingRouteStyle">
+                  <option value="balanced">Balanced</option>
+                  <option value="nearFirst">Nearest first</option>
+                  <option value="heavyFirst">Heavy first</option>
+                  <option value="zoneSweep">Zone sweep</option>
+                </select>
+              </label>
+            </div>
+            <div class="toolbar spaced">
+              <button class="btn primary" id="saveSettingsBtn" type="button">Save Settings</button>
+            </div>
+          </div>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <div id="toast" class="toast"></div>
+  <script src="/app.js"></script>
+</body>
+</html>
