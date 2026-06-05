@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Driver Route</title>
+  <link rel="stylesheet" href="/styles.css">
+  <style>
+    body { background: #f4f7fa; }
+    .driver-shell { max-width: 760px; margin: 0 auto; padding: 14px; }
+    .driver-top { position: sticky; top: 0; z-index: 5; background: #f4f7fa; padding: 10px 0; }
+    .driver-title { background: #111827; color: white; border-radius: 8px; padding: 14px; }
+    .driver-title h1 { margin: 0; font-size: 20px; letter-spacing: 0; }
+    .driver-title p { margin: 5px 0 0; color: #c4cfdd; font-size: 13px; }
+    .driver-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+    .driver-stop { grid-template-columns: 38px minmax(0, 1fr); }
+    .driver-stop .row-actions { grid-column: 2; }
+    .driver-stop .btn { min-height: 40px; }
+    .full { grid-column: 1 / -1; }
+  </style>
+</head>
+<body>
+  <main class="driver-shell">
+    <div class="driver-top">
+      <section class="driver-title">
+        <h1 id="driverHeading">Driver Route</h1>
+        <p id="driverSummary">Loading daily stops...</p>
+      </section>
+      <div class="driver-actions">
+        <a id="fullMapBtn" class="btn primary" target="_blank" rel="noreferrer">Open Full Route</a>
+        <button id="refreshBtn" class="btn" type="button">Refresh</button>
+      </div>
+    </div>
+    <section id="driverStops" class="stack spaced"></section>
+  </main>
+  <div id="toast" class="toast"></div>
+  <script src="/driver.js"></script>
+</body>
+</html>
