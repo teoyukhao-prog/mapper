@@ -619,7 +619,7 @@ function parseTable(text) {
   const rows = parseDelimited(text, delimiter).filter((row) => row.some(Boolean));
   if (!rows.length) return [];
   const first = rows[0].map((cell) => normalizeKey(cell));
-  const hasHeader = first.some((key) => ["address", "postcode", "customer_name", "name", "order_id", "order"].includes(key));
+  const hasHeader = first.some((key) => ["address", "postcode", "customer_name", "name", "order_id", "order", "barcode", "upc", "sku", "qty", "quantity", "location", "location_code"].includes(key));
   const headers = hasHeader ? first : defaultHeaders(rows[0].length);
   return (hasHeader ? rows.slice(1) : rows).map((cells) => Object.fromEntries(headers.map((header, index) => [header, (cells[index] || "").trim()])));
 }
