@@ -2,7 +2,8 @@ const app = {
   token: localStorage.getItem("routewise_cloud_token") || "",
   workspace: null,
   activeRouteId: null,
-  view: "dashboard"
+  view: "dashboard",
+  stockScanFile: null
 };
 
 const $ = (id) => document.getElementById(id);
@@ -31,6 +32,20 @@ function bind() {
   $("historySearch").addEventListener("input", renderHistory);
   $("addPoBtn").addEventListener("click", addPurchaseOrder);
   $("saveProductBtn").addEventListener("click", saveProduct);
+  $("scanBtn").addEventListener("click", submitBarcodeScan);
+  $("scanBarcode").addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      submitBarcodeScan();
+    }
+  });
+  $("stockUploadFile").addEventListener("change", readStockUploadFile);
+  $("uploadStockBtn").addEventListener("click", uploadStockScans);
+  $("clearStockUploadBtn").addEventListener("click", () => {
+    $("stockUploadText").value = "";
+    app.stockScanFile = null;
+    $("stockUploadResult").textContent = "barcode, qty, location";
+  });
   $("saveLocationBtn").addEventListener("click", saveLocation);
   $("addVehicleBtn").addEventListener("click", addVehicle);
   $("saveSettingsBtn").addEventListener("click", saveSettings);
@@ -442,6 +457,57 @@ async function saveProduct() {
   toast("Product saved.");
 }
 
+async function submitBarcodeScan() {
+  const barcode = $("scanBarcode").value.trim();
+  if (!barcode) return toast("Scan or enter barcode/SKU first.");
+  try {
+    const result = await api("/api/stock-scans", {
+      method: "POST",
+      body: {
+        barcode,
+        qty: $("scanQty").value || 1,
+        locationCode: $("scanLocation").value,
+        reference: $("scanReference").value
+      }
+    });
+    app.workspace = result.workspace;
+    $("scanBarcode").value = "";
+    $("scanQty").value = "1";
+    renderApp();
+    showView("inventory");
+    $("scanBarcode").focus();
+    toast("Stock updated from barcode scan.");
+  } catch (error) {
+    toast(error.message);
+  }
+}
+
+async function readStockUploadFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  app.stockScanFile = null;
+  if (/\.xlsx$/i.test(file.name)) {
+    app.stockScanFile = { fileName: file.name, fileBase64: await fileToBase64(file) };
+    $("stockUploadText").value = "";
+  } else {
+    $("stockUploadText").value = await file.text();
+  }
+  $("stockUploadResult").textContent = `${file.name} ready`;
+  toast("Scanner file loaded.");
+}
+
+async function uploadStockScans() {
+  const csv = $("stockUploadText").value.trim();
+  if (!csv && !app.stockScanFile) return toast("Upload or paste scanner rows first.");
+  const result = await api("/api/import-stock-scans", { method: "POST", body: app.stockScanFile || { csv } });
+  app.workspace = result.workspace;
+  $("stockUploadResult").textContent = `${result.imported} updated, ${result.skipped.length} skipped`;
+  app.stockScanFile = null;
+  renderApp();
+  showView("inventory");
+  toast(`${result.imported} stock rows updated.`);
+}
+
 async function saveLocation() {
   const result = await api("/api/locations", {
     method: "POST",
@@ -679,6 +745,15 @@ function whatsappPhone(value) {
   if (digits.startsWith("60")) return digits;
   if (digits.startsWith("0")) return `6${digits}`;
   return digits;
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || "").split(",")[1] || "");
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
 }
 
 function escapeHtml(value) {
