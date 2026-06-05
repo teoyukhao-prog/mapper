@@ -204,6 +204,42 @@
             </div>
           </section>
         </div>
+
+        <div class="grid-2 spaced">
+          <section class="panel">
+            <div class="panel-header">
+              <h3>Live Barcode Scan</h3>
+              <span>Scanner updates stock immediately</span>
+            </div>
+            <div class="panel-body">
+              <div class="settings-grid">
+                <label class="field">Barcode / SKU<input id="scanBarcode" placeholder="Scan barcode here"></label>
+                <label class="field">Quantity<input id="scanQty" type="number" value="1"></label>
+                <label class="field">Location<input id="scanLocation" placeholder="A1-01"></label>
+                <label class="field">Reference<input id="scanReference" placeholder="Stock count / receiving"></label>
+              </div>
+              <div class="toolbar spaced">
+                <button class="btn primary" id="scanBtn" type="button">Update Stock</button>
+              </div>
+              <p class="small-note">Most barcode scanners work like a keyboard. Click the barcode field, scan the item, then press Enter or click Update Stock.</p>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-header">
+              <h3>Scanner Excel / CSV Upload</h3>
+              <span id="stockUploadResult">barcode, qty, location</span>
+            </div>
+            <div class="panel-body">
+              <label class="field">Scanner file<input id="stockUploadFile" type="file" accept=".xlsx,.csv,.tsv,.txt,text/csv,text/tab-separated-values"></label>
+              <label class="field">Paste scanner rows<textarea id="stockUploadText" placeholder="barcode,qty,location,reference&#10;955100320001,2,A1-01,stock count"></textarea></label>
+              <div class="toolbar">
+                <button class="btn primary" id="uploadStockBtn" type="button">Upload Stock Scan</button>
+                <button class="btn" id="clearStockUploadBtn" type="button">Clear</button>
+              </div>
+            </div>
+          </section>
+        </div>
       </section>
 
       <section id="outbound" class="view">
