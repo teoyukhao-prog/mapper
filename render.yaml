@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: routewise-cloud
+    runtime: node
+    plan: free
+    buildCommand: ""
+    startCommand: "node server.mjs"
+    envVars:
+      - key: NODE_VERSION
+        value: 22
