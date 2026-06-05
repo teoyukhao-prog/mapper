@@ -29,6 +29,9 @@ function bind() {
   $("copyDriverBtn").addEventListener("click", copyDriverRoute);
   $("historyFilter").addEventListener("change", renderHistory);
   $("historySearch").addEventListener("input", renderHistory);
+  $("addPoBtn").addEventListener("click", addPurchaseOrder);
+  $("saveProductBtn").addEventListener("click", saveProduct);
+  $("saveLocationBtn").addEventListener("click", saveLocation);
   $("addVehicleBtn").addEventListener("click", addVehicle);
   $("saveSettingsBtn").addEventListener("click", saveSettings);
 }
@@ -93,8 +96,13 @@ function renderApp() {
   showView(app.view);
   renderStats();
   renderDashboard();
+  renderInbound();
+  renderInventory();
+  renderOutbound();
   renderOrders();
   renderDispatch();
+  renderReports();
+  renderWarehouse();
   renderHistory();
   renderVehicles();
   renderSettings();
@@ -105,11 +113,15 @@ function showView(view) {
   document.querySelectorAll(".view").forEach((section) => section.classList.toggle("active", section.id === view));
   document.querySelectorAll(".nav button").forEach((button) => button.classList.toggle("active", button.dataset.view === view));
   const titles = {
-    dashboard: ["Dashboard", "Daily delivery control center"],
+    dashboard: ["Dashboard", "Warehouse and delivery control center"],
+    inbound: ["Inbound", "Purchase orders, receiving, and putaway"],
+    inventory: ["Inventory", "SKU setup, barcode, cost, price, and stock balance"],
+    outbound: ["Outbound", "Picking, packing, problem orders, and ship-out preparation"],
     orders: ["Orders", "Review, update, and track deliveries"],
     dispatch: ["Dispatch", "Send daily route to each driver smartphone"],
+    reports: ["Reports", "Stock, order, SKU, and operation intelligence"],
+    warehouse: ["Warehouse", "Locations, verifier rules, drivers, and customers"],
     history: ["History", "Completed deliveries, failed orders, and past activity"],
-    drivers: ["Drivers", "Vehicles, capacities, and WhatsApp handoff"],
     settings: ["Settings", "Business routing defaults"]
   };
   $("pageTitle").textContent = titles[view][0];
@@ -117,15 +129,14 @@ function showView(view) {
 }
 
 function renderStats() {
-  const { orders, vehicles, routes } = app.workspace;
+  const { orders, products, routes, wmsSummary } = app.workspace;
   const pending = orders.filter((order) => !["delivered", "cancelled"].includes(order.status));
   const review = pending.filter((order) => order.issues.length || order.status === "review");
-  const delivered = orders.filter((order) => order.status === "delivered");
   const distance = routes.reduce((sum, route) => sum + (route.summary?.distance || 0), 0);
-  $("statPending").textContent = pending.length;
-  $("statReview").textContent = review.length;
-  $("statDelivered").textContent = delivered.length;
-  $("statVehicles").textContent = vehicles.length;
+  $("statPending").textContent = wmsSummary?.pendingOutbound ?? pending.length;
+  $("statReview").textContent = wmsSummary?.problemOrders ?? review.length;
+  $("statDelivered").textContent = wmsSummary?.totalStock ?? products.reduce((sum, product) => sum + Number(product.stock || 0), 0);
+  $("statVehicles").textContent = wmsSummary?.skus ?? products.length;
   $("statRoute").textContent = `${Math.round(distance)} km`;
 }
 
@@ -136,6 +147,101 @@ function renderDashboard() {
   $("issueList").innerHTML = issues.length ? issues.slice(0, 12).map(({ order, issue }) => `
     <div class="issue"><strong>${escapeHtml(order.orderId)} · ${escapeHtml(order.customer)}</strong><br>${escapeHtml(issue)} · ${escapeHtml(order.cleanAddress)}</div>
   `).join("") : `<div class="card"><strong>No review issues</strong><p>Imported orders are ready for route planning.</p></div>`;
+}
+
+function renderInbound() {
+  const purchaseOrders = [...app.workspace.purchaseOrders].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+  const open = purchaseOrders.filter((po) => po.status !== "received");
+  $("inboundCount").textContent = `${open.length} open`;
+  $("purchaseOrderList").innerHTML = purchaseOrders.length ? purchaseOrders.map((po) => `
+    <div class="card">
+      <strong>${escapeHtml(po.poNo)} · ${escapeHtml(po.supplier)}</strong>
+      <p>${escapeHtml(po.sku)} · ${escapeHtml(po.productName)}<br>${Number(po.qty)} units · Putaway ${escapeHtml(po.locationCode)} · ${statusLabel(po.status)}</p>
+      <div class="row-actions spaced">
+        ${po.status === "received" ? `<span class="chip ok">received</span>` : `<button class="text-btn" onclick="receivePurchaseOrder('${po.id}')">Receive</button>`}
+      </div>
+    </div>
+  `).join("") : `<div class="card"><strong>No purchase orders yet</strong><p>Create a PO when supplier stock is coming in.</p></div>`;
+  $("putawayList").innerHTML = open.length ? open.map((po) => `
+    <div class="issue">
+      <strong>${escapeHtml(po.sku)} needs putaway</strong><br>
+      ${Number(po.qty)} units from ${escapeHtml(po.supplier)} should go to ${escapeHtml(po.locationCode)}.
+    </div>
+  `).join("") : `<div class="card"><strong>Nothing waiting for putaway</strong><p>All open receiving work is clear.</p></div>`;
+}
+
+function renderInventory() {
+  const products = [...app.workspace.products].sort((a, b) => a.sku.localeCompare(b.sku));
+  $("inventoryCount").textContent = `${products.length} SKUs`;
+  $("inventoryBody").innerHTML = products.length ? products.map((product) => `
+    <tr>
+      <td><strong>${escapeHtml(product.sku)}</strong><br>${escapeHtml(product.upc || "-")}</td>
+      <td>${escapeHtml(product.name)}<br><span class="muted">${escapeHtml(product.supplier || "-")}</span></td>
+      <td>${escapeHtml(product.category || "-")}</td>
+      <td>${escapeHtml(product.locationCode || "-")}</td>
+      <td>${stockChip(product)}</td>
+      <td>RM ${Number(product.price || 0).toFixed(2)}<br><span class="muted">Cost RM ${Number(product.cost || 0).toFixed(2)}</span></td>
+    </tr>
+  `).join("") : `<tr><td colspan="6">No products saved yet.</td></tr>`;
+}
+
+function renderOutbound() {
+  const activeOrders = app.workspace.orders.filter((order) => !["delivered", "cancelled"].includes(order.status));
+  $("outboundCount").textContent = `${activeOrders.length} orders`;
+  const groups = [
+    ["To Pick", ["pending", "review"]],
+    ["Picking", ["picking"]],
+    ["Packing", ["packing"]],
+    ["To Ship", ["to_ship", "routed"]]
+  ];
+  $("outboundBoard").innerHTML = groups.map(([title, statuses]) => {
+    const rows = activeOrders.filter((order) => statuses.includes(order.status));
+    return `
+      <section class="mini-panel">
+        <h4>${title} <span>${rows.length}</span></h4>
+        ${rows.length ? rows.slice(0, 10).map((order) => outboundCard(order)).join("") : `<p class="muted">No orders.</p>`}
+      </section>`;
+  }).join("");
+  const problems = app.workspace.orders.filter((order) => order.issues?.length || order.status === "review" || order.status === "failed");
+  $("problemOrderList").innerHTML = problems.length ? problems.slice(0, 12).map((order) => `
+    <div class="issue"><strong>${escapeHtml(order.orderId)} · ${escapeHtml(order.customer)}</strong><br>${escapeHtml(order.issues?.join(", ") || order.status)} · ${escapeHtml(order.items)}</div>
+  `).join("") : `<div class="card"><strong>No problem orders</strong><p>Outbound orders look ready.</p></div>`;
+}
+
+function renderReports() {
+  const summary = app.workspace.wmsSummary || {};
+  const delivered = app.workspace.orders.filter((order) => order.status === "delivered").length;
+  const failed = app.workspace.orders.filter((order) => order.status === "failed").length;
+  $("reportCards").innerHTML = [
+    ["Open inbound", summary.openInbound || 0],
+    ["Total stock qty", summary.totalStock || 0],
+    ["Low stock SKUs", summary.lowStock || 0],
+    ["Pending outbound", summary.pendingOutbound || 0],
+    ["Delivered orders", delivered],
+    ["Failed orders", failed]
+  ].map(([label, value]) => `<div class="metric"><span>${label}</span><strong>${value}</strong></div>`).join("");
+  const movements = [...app.workspace.stockMovements].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))).slice(0, 80);
+  $("movementCount").textContent = `${app.workspace.stockMovements.length} movements`;
+  $("movementBody").innerHTML = movements.length ? movements.map((movement) => `
+    <tr>
+      <td>${formatDateTime(movement.createdAt)}</td>
+      <td>${escapeHtml(movement.type)}</td>
+      <td>${escapeHtml(movement.sku)}</td>
+      <td>${escapeHtml(movement.locationCode)}</td>
+      <td>${Number(movement.qty)}</td>
+      <td>${escapeHtml(movement.reference || "-")}</td>
+    </tr>
+  `).join("") : `<tr><td colspan="6">No stock movement yet.</td></tr>`;
+}
+
+function renderWarehouse() {
+  $("locationCount").textContent = `${app.workspace.locations.length} locations`;
+  $("locationList").innerHTML = app.workspace.locations.map((location) => `
+    <div class="card">
+      <strong>${escapeHtml(location.code)} · ${escapeHtml(location.zone)}</strong>
+      <p>${escapeHtml(location.type)}<br>Verifier: ${escapeHtml(location.verifier || "-")}</p>
+    </div>
+  `).join("");
 }
 
 function renderOrders() {
@@ -257,6 +363,23 @@ function renderVehicles() {
       </div>
     </div>
   `).join("");
+  $("customerList").innerHTML = app.workspace.customers.length ? `
+    <div class="mini-panel">
+      <h4>Customers <span>${app.workspace.customers.length}</span></h4>
+      ${app.workspace.customers.slice(0, 8).map((customer) => `<p><strong>${escapeHtml(customer.name)}</strong><br>${escapeHtml(customer.phone || "-")} · ${escapeHtml(customer.zone || "-")}</p>`).join("")}
+    </div>
+  ` : "";
+}
+
+function outboundCard(order) {
+  const nextStatus = order.status === "picking" ? "packing" : order.status === "packing" ? "to_ship" : order.status === "to_ship" ? "routed" : "picking";
+  const label = order.status === "picking" ? "Pack" : order.status === "packing" ? "Ready Ship" : order.status === "to_ship" ? "Keep Ready" : "Start Pick";
+  return `
+    <article class="pick-card">
+      <strong>${escapeHtml(order.orderId)}</strong>
+      <p>${escapeHtml(order.customer)}<br>${escapeHtml(order.items)}<br>${escapeHtml(order.zone)}</p>
+      <button class="text-btn" onclick="setOrderStatus('${order.id}', '${nextStatus}')">${label}</button>
+    </article>`;
 }
 
 function renderSettings() {
@@ -267,6 +390,72 @@ function renderSettings() {
   $("settingStopMinutes").value = business.stopMinutes || 12;
   $("settingSpeed").value = business.speedKmh || 32;
   $("settingRouteStyle").value = business.routeStyle || "balanced";
+}
+
+async function addPurchaseOrder() {
+  const result = await api("/api/purchase-orders", {
+    method: "POST",
+    body: {
+      poNo: $("poNo").value,
+      supplier: $("poSupplier").value,
+      sku: $("poSku").value,
+      productName: $("poProductName").value,
+      qty: $("poQty").value,
+      locationCode: $("poLocation").value
+    }
+  });
+  app.workspace = result.workspace;
+  ["poNo", "poSupplier", "poSku", "poProductName", "poLocation"].forEach((id) => $(id).value = "");
+  $("poQty").value = "1";
+  renderApp();
+  toast("Purchase order created.");
+}
+
+async function receivePurchaseOrder(id) {
+  const po = app.workspace.purchaseOrders.find((item) => item.id === id);
+  const result = await api("/api/purchase-orders/receive", { method: "PATCH", body: { id, locationCode: po?.locationCode } });
+  app.workspace = result.workspace;
+  renderApp();
+  toast("Stock received into inventory.");
+}
+
+async function saveProduct() {
+  const result = await api("/api/products", {
+    method: "POST",
+    body: {
+      sku: $("productSku").value,
+      upc: $("productUpc").value,
+      name: $("productName").value,
+      category: $("productCategory").value,
+      supplier: $("productSupplier").value,
+      locationCode: $("productLocation").value,
+      stock: $("productStock").value,
+      reorderLevel: $("productReorder").value,
+      cost: $("productCost").value,
+      price: $("productPrice").value
+    }
+  });
+  app.workspace = result.workspace;
+  ["productSku", "productUpc", "productName", "productCategory", "productSupplier", "productLocation"].forEach((id) => $(id).value = "");
+  ["productStock", "productReorder", "productCost", "productPrice"].forEach((id) => $(id).value = "0");
+  renderApp();
+  toast("Product saved.");
+}
+
+async function saveLocation() {
+  const result = await api("/api/locations", {
+    method: "POST",
+    body: {
+      code: $("locationCode").value,
+      zone: $("locationZone").value,
+      type: $("locationType").value,
+      verifier: $("locationVerifier").value
+    }
+  });
+  app.workspace = result.workspace;
+  ["locationCode", "locationZone", "locationType", "locationVerifier"].forEach((id) => $(id).value = "");
+  renderApp();
+  toast("Location saved.");
 }
 
 async function loadSample() {
@@ -447,6 +636,17 @@ function statusChip(order) {
   const label = order.issues?.length && !["delivered", "failed"].includes(order.status) ? "review" : order.status;
   const cls = label === "delivered" ? "ok" : label === "failed" ? "red" : label === "review" ? "warn" : "";
   return `<span class="chip ${cls}">${escapeHtml(label)}</span>`;
+}
+
+function statusLabel(value) {
+  const cls = value === "received" ? "ok" : value === "failed" ? "red" : value === "open" ? "warn" : "";
+  return `<span class="chip ${cls}">${escapeHtml(value || "open")}</span>`;
+}
+
+function stockChip(product) {
+  const stock = Number(product.stock || 0);
+  const low = stock <= Number(product.reorderLevel || 0);
+  return `<span class="chip ${low ? "warn" : "ok"}">${stock} units${low ? " · low" : ""}</span>`;
 }
 
 function getBounds(stops) {
